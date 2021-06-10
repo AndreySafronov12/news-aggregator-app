@@ -7,6 +7,7 @@ import com.news.aggregatorapp.mapper.ContentMapper;
 import com.news.aggregatorapp.model.Content;
 import com.news.aggregatorapp.model.ContentList;
 import com.news.aggregatorapp.model.MeduzaNews;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,32 +17,25 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.util.List;
 
 @RestController
-public class RestNewApiController {
+public class RestNewsApiController {
     private final String url = "https://meduza.io/api/v3/search?chrono=news&locale=ru&page=0&per_page=24";
+
+    @Value("${meduza.api.url.part-one}")
+    private String urlPartOne;
+
+    @Value("${meduza.api.url.part-two}")
+    private String urlPartTwo;
+
     private final ContentMapper contentMapper;
 
-    public RestNewApiController(ContentMapper contentMapper) {
+    public RestNewsApiController(ContentMapper contentMapper) {
         this.contentMapper = contentMapper;
     }
 
     @GetMapping(value = "/news", produces = MediaType.APPLICATION_JSON_VALUE)
     public ContentList news(@RequestParam(value = "page", required = false, defaultValue = "0") String page) throws JsonProcessingException {
-
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("https://meduza.io/api/v3/search?chrono=news&locale=ru&page=")
-                .append(page)
-                .append("&per_page=24");
-
-        String url = stringBuilder.toString();
-
-        WebClient webClient = WebClient.create();
-        String responseJson = webClient.get()
-                .uri(url)
-                .exchange()
-                .block()
-                .bodyToMono(String.class)
-                .block();
-
+        String url = createUrl(urlPartOne, urlPartTwo, page);
+        String responseJson = getContentFromMeduzaApi(url);
         MeduzaNews meduzaNews = stringToJsonMeduza(responseJson);
         List<Content> content = contentMapper.toDTO(meduzaNews);
         return new ContentList(content);
@@ -53,5 +47,21 @@ public class RestNewApiController {
         return objectMapper.readValue(text, MeduzaNews.class);
     }
 
+    private String createUrl(String urlPartOne, String urlPartTwo, String page) {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append(urlPartOne)
+                .append(page)
+                .append(urlPartTwo);
 
+        return stringBuilder.toString();
+    }
+
+    private String getContentFromMeduzaApi(String url) {
+        return WebClient.create().get()
+                .uri(url)
+                .exchange()
+                .block()
+                .bodyToMono(String.class)
+                .block();
+    }
 }
